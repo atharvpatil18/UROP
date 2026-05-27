@@ -93,21 +93,26 @@ def generate_trajectory_for_word(word: str, seq_len: int = 40) -> list:
 def classify_gesture_geometrically(coords: np.ndarray) -> tuple:
     """
     Heuristic geometric classifier analyzing finger extension vectors to recognize
-    alphabet gestures in real-time. This provides high-fidelity, zero-lag tracking.
+    alphabet gestures in real-time for BOTH Left and Right hands.
     Returns: (predicted_char, confidence)
     """
-    # 1. Check if Right Hand is active (using Wrist position and coordinates)
+    # Extract Right Hand and Left Hand segments
     r_hand = coords[0:63]
-    if not np.any(r_hand != 0.0):
+    l_hand = coords[63:126]
+    
+    # Determine which hand is active
+    is_r_active = np.any(r_hand != 0.0)
+    is_l_active = np.any(l_hand != 0.0)
+    
+    if not is_r_active and not is_l_active:
         return None, 0.0
         
-    # Extract joint keypoints for distance calculation
-    # Right hand indices: 0: Wrist, 4: Thumb Tip, 8: Index Tip, 12: Middle Tip, 16: Ring Tip, 20: Pinky Tip
-    # Knuckles: 2: Thumb base, 5: Index knuckle, 9: Middle knuckle, 13: Ring knuckle, 17: Pinky knuckle
-    wrist = r_hand[0:3]
+    # Use the active hand segment (supporting left and right hands!)
+    hand = r_hand if is_r_active else l_hand
+    wrist = hand[0:3]
     
     def get_joint(idx):
-        return r_hand[idx*3 : idx*3 + 3]
+        return hand[idx*3 : idx*3 + 3]
         
     # Tips
     t_tip = get_joint(4)
@@ -212,6 +217,10 @@ async def websocket_endpoint(websocket: WebSocket):
     frame_window = []
     window_max_len = 30
     
+    # Track continuous movement trajectories for sentence/word level matching
+    active_trajectory = []
+    inactive_frames = 0
+    
     try:
         while True:
             # Receive coordinate array from client browser
@@ -223,7 +232,54 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Apply normalization server-side as backup and validation
                 normalized = normalize_coordinates(np.array(data, dtype=np.float32))
                 
-                # First run heuristic geometric classifier
+                # Extract active hand segments
+                r_hand = normalized[0:63]
+                l_hand = normalized[63:126]
+                is_r_active = np.any(r_hand != 0.0)
+                is_l_active = np.any(l_hand != 0.0)
+                is_hand_active = is_r_active or is_l_active
+                
+                if is_hand_active:
+                    active_hand = r_hand if is_r_active else l_hand
+                    active_trajectory.append(active_hand)
+                    inactive_frames = 0
+                else:
+                    inactive_frames += 1
+                    
+                # 1. Continuous phrase/word level translation trigger (pausing after active signing)
+                if inactive_frames == 6 and len(active_trajectory) > 12:
+                    traj = np.array(active_trajectory)
+                    active_trajectory = [] # Reset trajectory
+                    
+                    # Extract wrist coordinate positions
+                    wrist_coords = traj[:, 0:3]
+                    xs = wrist_coords[:, 0]
+                    ys = wrist_coords[:, 1]
+                    
+                    dx = np.max(xs) - np.min(xs)
+                    dy = np.max(ys) - np.min(ys)
+                    std_x = np.std(xs)
+                    std_y = np.std(ys)
+                    
+                    phrase = None
+                    if dy > 0.15 and std_y > 0.04 and std_x < 0.06:
+                        phrase = "HELLO"
+                    elif dy > 0.10 and ys[-1] > ys[0] + 0.06:
+                        phrase = "THANK YOU"
+                    elif dx > 0.15 and std_x > 0.04 and std_y < 0.06:
+                        phrase = "GOODBYE"
+                    elif dx > 0.10 and dy > 0.10:
+                        phrase = "HOW ARE YOU"
+                        
+                    if phrase:
+                        await websocket.send_json({
+                            "type": "sentence",
+                            "text": phrase,
+                            "confidence": 0.95
+                        })
+                        
+                # 2. Letter-level translation
+                # First run heuristic geometric classifier (supporting both left and right hands)
                 geom_char, geom_conf = classify_gesture_geometrically(normalized)
                 
                 if geom_char:

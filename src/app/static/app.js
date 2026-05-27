@@ -245,7 +245,7 @@ window.addEventListener('resize', () => {
     renderer.setSize(width, height);
 });
 
-// Map 150-D Coordinate Array to Rigged joints with smart T-pose fallbacks for untracked sections
+// Map 150-D Coordinate Array to Rigged joints with smart T-pose fallbacks and kinematically chained arm joints
 let lerpWeight = 0.35; // Position smoothing factor (lerping reduces noise)
 function driveAvatarWithCoordinates(coords) {
     // 150-D vector extraction matching our schema:
@@ -255,39 +255,7 @@ function driveAvatarWithCoordinates(coords) {
     const offsetZ = -0.5; // push avatar slightly back
     const scaleFactor = 1.6;
     
-    // 1. Right Hand (21 points) - fallback to T-pose if right hand landmarks are active 0
-    const hasRHand = coords.slice(0, 63).some(v => v !== 0);
-    const rHandData = hasRHand ? coords : T_POSE_COORDS;
-    
-    for (let i = 0; i < 21; i++) {
-        const key = `R_${i}`;
-        const start = i * 3;
-        
-        // Scale and mirror coordinates
-        const tx = rHandData[start] * scaleFactor;
-        const ty = -rHandData[start+1] * scaleFactor + 0.3; // align relative to torso
-        const tz = -rHandData[start+2] * scaleFactor + offsetZ;
-        
-        // Apply smoothing interpolation
-        joints[key].position.lerp(new THREE.Vector3(tx, ty, tz), lerpWeight);
-    }
-    
-    // 2. Left Hand (21 points) - fallback to T-pose if left hand landmarks are active 0
-    const hasLHand = coords.slice(63, 126).some(v => v !== 0);
-    const lHandData = hasLHand ? coords : T_POSE_COORDS;
-    
-    for (let i = 0; i < 21; i++) {
-        const key = `L_${i}`;
-        const start = 63 + i * 3;
-        
-        const tx = lHandData[start] * scaleFactor;
-        const ty = -lHandData[start+1] * scaleFactor + 0.3;
-        const tz = -lHandData[start+2] * scaleFactor + offsetZ;
-        
-        joints[key].position.lerp(new THREE.Vector3(tx, ty, tz), lerpWeight);
-    }
-    
-    // 3. Upper Body Pose (8 joints: nose, l_eye, r_eye, l_shoulder, r_shoulder, l_elbow, r_elbow, pelvis)
+    // 1. Upper Body Pose (8 joints: nose, l_eye, r_eye, l_shoulder, r_shoulder, l_elbow, r_elbow, pelvis)
     const hasPose = coords.slice(126, 150).some(v => v !== 0);
     const poseData = hasPose ? coords : T_POSE_COORDS;
     
@@ -300,6 +268,54 @@ function driveAvatarWithCoordinates(coords) {
         
         joints[name].position.lerp(new THREE.Vector3(tx, ty, tz), lerpWeight);
     });
+    
+    // 2. Right Arm & Hand Kinematic Chain (prevents crossed arms, aligns wrist to elbow)
+    const hasRHand = coords.slice(0, 63).some(v => v !== 0);
+    const rHandData = hasRHand ? coords : T_POSE_COORDS;
+    
+    // Position Right Wrist (R_0) relative to Right Elbow
+    const rElbowPos = joints['r_elbow'].position;
+    const rx = rElbowPos.x + (hasRHand ? rHandData[0] * 0.4 : 0.18);
+    const ry = rElbowPos.y + (hasRHand ? -rHandData[1] * 0.4 : 0.0);
+    const rz = rElbowPos.z + (hasRHand ? -rHandData[2] * 0.4 : 0.0);
+    joints['R_0'].position.lerp(new THREE.Vector3(rx, ry, rz), lerpWeight);
+    
+    // Position Right fingers relative to Right Wrist R_0
+    const rWristPos = joints['R_0'].position;
+    for (let i = 1; i < 21; i++) {
+        const key = `R_${i}`;
+        const start = i * 3;
+        
+        const tx = rWristPos.x + rHandData[start] * 0.4;
+        const ty = rWristPos.y - rHandData[start+1] * 0.4;
+        const tz = rWristPos.z - rHandData[start+2] * 0.4;
+        
+        joints[key].position.lerp(new THREE.Vector3(tx, ty, tz), lerpWeight);
+    }
+    
+    // 3. Left Arm & Hand Kinematic Chain (aligns wrist to elbow)
+    const hasLHand = coords.slice(63, 126).some(v => v !== 0);
+    const lHandData = hasLHand ? coords : T_POSE_COORDS;
+    
+    // Position Left Wrist (L_0) relative to Left Elbow
+    const lElbowPos = joints['l_elbow'].position;
+    const lx = lElbowPos.x + (hasLHand ? lHandData[63] * 0.4 : -0.18);
+    const ly = lElbowPos.y + (hasLHand ? -lHandData[64] * 0.4 : 0.0);
+    const lz = lElbowPos.z + (hasLHand ? -lHandData[65] * 0.4 : 0.0);
+    joints['L_0'].position.lerp(new THREE.Vector3(lx, ly, lz), lerpWeight);
+    
+    // Position Left fingers relative to Left Wrist L_0
+    const lWristPos = joints['L_0'].position;
+    for (let i = 1; i < 21; i++) {
+        const key = `L_${i}`;
+        const start = 63 + i * 3;
+        
+        const tx = lWristPos.x + lHandData[start] * 0.4;
+        const ty = lWristPos.y - lHandData[start+1] * 0.4;
+        const tz = lWristPos.z - lHandData[start+2] * 0.4;
+        
+        joints[key].position.lerp(new THREE.Vector3(tx, ty, tz), lerpWeight);
+    }
     
     // Move Head mesh based on Nose coordinate
     if (joints['nose'].position.z > -5) {
@@ -390,13 +406,36 @@ function connectWebSocket() {
                 sentenceOutput.innerText = "";
             }
             
-            // Append prediction (only append if it's different from the last letter, or handle space)
+            // Append prediction (only append if it's different from the last letter)
             const currentSent = sentenceOutput.innerText;
             if (currentSent === "" || currentSent[currentSent.length - 1] !== letter) {
                 sentenceOutput.innerText += letter;
                 // Speak predicted letter natively client-side
                 triggerClientTTS(letter);
             }
+        } else if (data.type === "sentence") {
+            const phrase = data.text.toUpperCase();
+            const conf = Math.round(data.confidence * 100);
+            
+            // Display phrase and confidence
+            predictedLetterBox.innerText = phrase;
+            confidencePercent.innerText = `${conf}%`;
+            confidenceFill.style.width = `${conf}%`;
+            
+            // Update accumulated sentence console
+            if (sentenceOutput.innerText === "Waiting for gesture inputs..." || sentenceOutput.innerText === "") {
+                sentenceOutput.innerText = phrase;
+            } else {
+                // Check if last word was already this phrase to prevent spamming
+                const currentSent = sentenceOutput.innerText;
+                if (!currentSent.endsWith(phrase)) {
+                    sentenceOutput.innerText += " " + phrase;
+                }
+            }
+            
+            // Speak full sentence immediately client-side
+            triggerClientTTS(phrase);
+            
         } else if (data.type === "avatar_trajectory") {
             console.log("Received WebSocket avatar trajectory payload.");
             animationQueue = [];
