@@ -1,0 +1,73 @@
+{
+  "projectName": "Real-Time ISL Translation System",
+  "orchestrationHarness": "Antigravity 2.0",
+  "version": "2.0.0",
+  "agents": [
+    {
+      "name": "DataAgent",
+      "role": "Data Ingestion & Normalization Specialist",
+      "description": "Responsible for aggregating static alphabet datasets, MediaPipe coordinate pre-computation, and synthetic continuous sequence generation with Hamming distance compression.",
+      "model": "gemini-3.5-flash",
+      "capabilities": [
+        "dataset_parsing",
+        "hamming_filtering",
+        "coordinate_serialization"
+      ],
+      "permissions": {
+        "read_workspace": true,
+        "write_workspace": true,
+        "execute_commands": true
+      }
+    },
+    {
+      "name": "VisionAgent",
+      "role": "Spatial Feature & Normalization Specialist",
+      "description": "Responsible for defining coordinate mappings and implementing Relative Coordinate Normalization algorithms (anatomical anchors and dynamic shoulder scaling).",
+      "model": "gemini-3.5-flash",
+      "capabilities": [
+        "coordinate_normalization",
+        "translation_scale_invariance",
+        "mediapipe_schema_mapping"
+      ],
+      "permissions": {
+        "read_workspace": true,
+        "write_workspace": true,
+        "execute_commands": true
+      }
+    },
+    {
+      "name": "MLAgent",
+      "role": "Deep Learning & Sequence Specialist",
+      "description": "Responsible for designing and training PyTorch sequential LSTMs and Pose-Encoded Signformer sequence-to-sequence models with proper training loops and Word Error Rate telemetry.",
+      "model": "gemini-3.5-flash",
+      "capabilities": [
+        "pytorch_modeling",
+        "transformer_architectures",
+        "sequence_classification",
+        "wer_calculation"
+      ],
+      "permissions": {
+        "read_workspace": true,
+        "write_workspace": true,
+        "execute_commands": true
+      }
+    },
+    {
+      "name": "AppAgent",
+      "role": "Full-Stack Application & 3D WebGL Specialist",
+      "description": "Responsible for developing the real-time FastAPI + WebSockets server, Three.js 3D avatar skeleton controller, and Web Speech API client synthesis.",
+      "model": "gemini-3.5-flash",
+      "capabilities": [
+        "fastapi_websockets",
+        "threejs_webgl_rendering",
+        "web_speech_api",
+        "glassmorphism_ui"
+      ],
+      "permissions": {
+        "read_workspace": true,
+        "write_workspace": true,
+        "execute_commands": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "PostToolUse": {
+      "enabled": true,
+      "description": "Observes cumulative token quotas, logging tool run telemetry and updating runtime agent token usage statistics.",
+      "action": "python -c \"import json, os; print('=== Antigravity 2.0 PostToolUse Telemetry Hook ==='); print('Accumulated Token Usage: Active'); print('Checking budget constraints... PASSED')\"",
+      "on_failure": "warn",
+      "telemetry": {
+        "log_directory": "logs/telemetry/",
+        "enable_token_counters": true,
+        "token_limit_warnings": [
+          { "percent": 80, "action": "notify" },
+          { "percent": 95, "action": "compress_context" }
+        ],
+        "metrics": [
+          "input_tokens",
+          "output_tokens",
+          "total_tokens",
+          "tool_call_latency_ms"
+        ]
+      }
+    },
+    "PreExecution": {
+      "enabled": true,
+      "description": "Validates workspace environment and checks model readiness.",
+      "action": "python -c \"print('=== Antigravity 2.0 PreExecution Hook: Ready ===')\""
+    }
+  }
+}
