@@ -41,6 +41,43 @@ let scene, camera3D, renderer;
 let joints = {}; // Holds 3D mesh points for skeletal rigging
 let bones = [];   // Holds line meshes representing body links
 
+// Generate default clean T-pose coordinates vector to initialize avatar and handle active tracking drops
+function getTPoseCoordinates() {
+    const coords = new Array(150).fill(0.0);
+    // Upper body pose
+    coords[126] = 0.0; coords[127] = 0.35; coords[128] = 0.0;     // Nose
+    coords[129] = -0.05; coords[130] = 0.37; coords[131] = 0.05;   // L Eye
+    coords[132] = 0.05; coords[133] = 0.37; coords[134] = 0.05;    // R Eye
+    coords[135] = -0.22; coords[136] = 0.15; coords[137] = 0.0;    // L Shoulder
+    coords[138] = 0.22; coords[139] = 0.15; coords[140] = 0.0;     // R Shoulder
+    coords[141] = -0.42; coords[142] = 0.15; coords[143] = 0.0;    // L Elbow
+    coords[144] = 0.42; coords[145] = 0.15; coords[146] = 0.0;     // R Elbow
+    coords[147] = 0.0; coords[148] = -0.45; coords[149] = 0.0;     // Pelvis (bottom body anchor)
+    
+    // Left Hand wrist
+    coords[63] = -0.6; coords[64] = 0.15; coords[65] = 0.0;
+    // Left Hand fingers extending horizontally
+    for (let i = 1; i < 21; i++) {
+        const start = 63 + i * 3;
+        coords[start] = -0.6 - 0.04 * (i % 5) - 0.02 * Math.floor(i / 5);
+        coords[start+1] = 0.15 + 0.01 * (i % 5);
+        coords[start+2] = 0.0;
+    }
+    
+    // Right Hand wrist
+    coords[0] = 0.6; coords[1] = 0.15; coords[2] = 0.0;
+    // Right Hand fingers extending horizontally
+    for (let i = 1; i < 21; i++) {
+        const start = i * 3;
+        coords[start] = 0.6 + 0.04 * (i % 5) + 0.02 * Math.floor(i / 5);
+        coords[start+1] = 0.15 + 0.01 * (i % 5);
+        coords[start+2] = 0.0;
+    }
+    
+    return coords;
+}
+const T_POSE_COORDS = getTPoseCoordinates();
+
 function initThreeJS() {
     const width = avatarContainer.clientWidth;
     const height = avatarContainer.clientHeight;
@@ -165,6 +202,9 @@ function initThreeJS() {
         bones.push(line);
     });
     
+    // Load and drive avatar directly into beautiful initial T-Pose
+    driveAvatarWithCoordinates(T_POSE_COORDS);
+    
     // Start Three.js Animation Loop
     animate();
 }
@@ -205,7 +245,7 @@ window.addEventListener('resize', () => {
     renderer.setSize(width, height);
 });
 
-// Map 150-D Coordinate Array to Rigged joints
+// Map 150-D Coordinate Array to Rigged joints with smart T-pose fallbacks for untracked sections
 let lerpWeight = 0.35; // Position smoothing factor (lerping reduces noise)
 function driveAvatarWithCoordinates(coords) {
     // 150-D vector extraction matching our schema:
@@ -215,46 +255,48 @@ function driveAvatarWithCoordinates(coords) {
     const offsetZ = -0.5; // push avatar slightly back
     const scaleFactor = 1.6;
     
-    // 1. Right Hand (21 points)
+    // 1. Right Hand (21 points) - fallback to T-pose if right hand landmarks are active 0
     const hasRHand = coords.slice(0, 63).some(v => v !== 0);
+    const rHandData = hasRHand ? coords : T_POSE_COORDS;
+    
     for (let i = 0; i < 21; i++) {
         const key = `R_${i}`;
-        if (hasRHand) {
-            const start = i * 3;
-            // Target coordinates
-            const tx = coords[start] * scaleFactor + 0.3;
-            const ty = -coords[start+1] * scaleFactor - 0.1;
-            const tz = -coords[start+2] * scaleFactor + offsetZ;
-            
-            // Apply smoothing interpolation
-            joints[key].position.lerp(new THREE.Vector3(tx, ty, tz), lerpWeight);
-        } else {
-            joints[key].position.set(0, 0, -10); // Hide hand if not detected
-        }
+        const start = i * 3;
+        
+        // Scale and mirror coordinates
+        const tx = rHandData[start] * scaleFactor;
+        const ty = -rHandData[start+1] * scaleFactor + 0.3; // align relative to torso
+        const tz = -rHandData[start+2] * scaleFactor + offsetZ;
+        
+        // Apply smoothing interpolation
+        joints[key].position.lerp(new THREE.Vector3(tx, ty, tz), lerpWeight);
     }
     
-    // 2. Left Hand (21 points)
+    // 2. Left Hand (21 points) - fallback to T-pose if left hand landmarks are active 0
     const hasLHand = coords.slice(63, 126).some(v => v !== 0);
+    const lHandData = hasLHand ? coords : T_POSE_COORDS;
+    
     for (let i = 0; i < 21; i++) {
         const key = `L_${i}`;
-        if (hasLHand) {
-            const start = 63 + i * 3;
-            const tx = coords[start] * scaleFactor - 0.3;
-            const ty = -coords[start+1] * scaleFactor - 0.1;
-            const tz = -coords[start+2] * scaleFactor + offsetZ;
-            joints[key].position.lerp(new THREE.Vector3(tx, ty, tz), lerpWeight);
-        } else {
-            joints[key].position.set(0, 0, -10);
-        }
+        const start = 63 + i * 3;
+        
+        const tx = lHandData[start] * scaleFactor;
+        const ty = -lHandData[start+1] * scaleFactor + 0.3;
+        const tz = -lHandData[start+2] * scaleFactor + offsetZ;
+        
+        joints[key].position.lerp(new THREE.Vector3(tx, ty, tz), lerpWeight);
     }
     
     // 3. Upper Body Pose (8 joints: nose, l_eye, r_eye, l_shoulder, r_shoulder, l_elbow, r_elbow, pelvis)
+    const hasPose = coords.slice(126, 150).some(v => v !== 0);
+    const poseData = hasPose ? coords : T_POSE_COORDS;
+    
     const poseNames = ['nose', 'l_eye', 'r_eye', 'l_shoulder', 'r_shoulder', 'l_elbow', 'r_elbow', 'pelvis'];
     poseNames.forEach((name, idx) => {
         const start = 126 + idx * 3;
-        const tx = coords[start] * scaleFactor;
-        const ty = -coords[start+1] * scaleFactor;
-        const tz = -coords[start+2] * scaleFactor + offsetZ;
+        const tx = poseData[start] * scaleFactor;
+        const ty = -poseData[start+1] * scaleFactor + 0.3;
+        const tz = -poseData[start+2] * scaleFactor + offsetZ;
         
         joints[name].position.lerp(new THREE.Vector3(tx, ty, tz), lerpWeight);
     });
@@ -568,6 +610,10 @@ function stopWebcamInference() {
 
 // Event Listeners
 btnWebcam.addEventListener('click', () => {
+    // Standard hack to register user interaction token and unlock SpeechSynthesis in Chrome/Safari
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
+    
     if (activeWebcam) {
         stopWebcamInference();
     } else {
