@@ -13,12 +13,12 @@
     <!-- Custom Vanilla Styling -->
     <link rel="stylesheet" href="/static/style.css">
     
-    <!-- Three.js CDN for Rigged WebGL Humanoid Avatar -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Three.js CDN for Rigged WebGL Humanoid Avatar (Fallback-protected) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" onerror="console.warn('Three.js CDN failed. Activating high-performance local 3D Canvas Perspective Renderer.')"></script>
     
     <!-- MediaPipe Holistic Client-Side APIs -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous" defer></script>
 </head>
 <body>
     <div class="glass-bg"></div>
@@ -48,8 +48,8 @@
             <!-- Left Panel: Camera Ingestion & Recognition Output -->
             <section class="grid-card camera-card">
                 <div class="card-header">
-                    <h2>Live Ingestion Channel</h2>
-                    <span class="subtitle">Client-Side MediaPipe Holistic (d_in ≈ 150)</span>
+                    <h2>Live Gesture Ingestion</h2>
+                    <span class="subtitle">MediaPipe & Coordinate Stream</span>
                 </div>
                 
                 <div class="webcam-viewport">
@@ -59,7 +59,7 @@
                         <svg viewBox="0 0 24 24" class="camera-icon">
                             <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4zM14 13h-3v3H9v-3H6v-2h3V8h2v3h3v2z"/>
                         </svg>
-                        <p>Click "Start Webcam" to stream coordinate vectors</p>
+                        <p>Click "Start Webcam" or choose a "Simulated Gesture" below</p>
                     </div>
                 </div>
                 
@@ -67,13 +67,23 @@
                     <button class="btn btn-primary" id="btn-webcam">Start Webcam</button>
                     <button class="btn btn-secondary" id="btn-tts-toggle">Auto-TTS: ON</button>
                 </div>
+
+                <div class="simulated-gesture-section">
+                    <h3>Simulated Gesture Trajectory (Zero-Dependency)</h3>
+                    <div class="sim-buttons-grid">
+                        <button class="btn btn-small btn-secondary btn-sim" data-word="hello">HELLO</button>
+                        <button class="btn btn-small btn-secondary btn-sim" data-word="thank you">THANK YOU</button>
+                        <button class="btn btn-small btn-secondary btn-sim" data-word="goodbye">GOODBYE</button>
+                        <button class="btn btn-small btn-secondary btn-sim" data-word="how are you">HOW ARE YOU</button>
+                    </div>
+                </div>
             </section>
             
             <!-- Center Panel: Translation Console & Output -->
             <section class="grid-card console-card">
                 <div class="card-header">
-                    <h2>Translation Output</h2>
-                    <span class="subtitle">Real-Time Continuous Classification</span>
+                    <h2>Translation Output Console</h2>
+                    <span class="subtitle">Hybrid Posture Heuristic & Sequence Models</span>
                 </div>
                 
                 <div class="translation-output-container">
@@ -81,7 +91,7 @@
                         -
                     </div>
                     <div class="confidence-bar-container">
-                        <label>Prediction Confidence</label>
+                        <label>Translation Confidence</label>
                         <div class="progress-track">
                             <div class="progress-bar" id="confidence-fill" style="width: 0%"></div>
                         </div>
@@ -90,7 +100,7 @@
                 </div>
                 
                 <div class="running-sentence-container">
-                    <h3>Accumulated Sentence</h3>
+                    <h3>Accumulated Translation Sentence</h3>
                     <div class="sentence-bubble" id="sentence-output">
                         Waiting for gesture inputs...
                     </div>
@@ -101,21 +111,22 @@
                 </div>
             </section>
             
-            <!-- Right Panel: Rigged 3D WebGL Humanoid Avatar -->
+            <!-- Right Panel: Rigged 3D WebGL Avatar -->
             <section class="grid-card avatar-card">
                 <div class="card-header">
-                    <h2>3D Rigged Avatar Viewport</h2>
-                    <span class="subtitle">Three.js Skeletal Bone Actuation</span>
+                    <h2>Rigged 3D Avatar Viewport</h2>
+                    <span class="subtitle">Interactive 3D Perspective Renderer</span>
                 </div>
                 
                 <div class="avatar-viewport" id="avatar-container">
-                    <!-- WebGL Canvas injected here by Three.js -->
+                    <!-- High-performance perspective Canvas always loads, Three.js falls back to it -->
+                    <canvas id="fallback-canvas-3d"></canvas>
                 </div>
                 
                 <div class="text-to-pose-controls">
                     <h3>Text-To-Sign Synthesis</h3>
                     <div class="input-row">
-                        <input type="text" id="synthesis-input" placeholder="Type words (hello, thank you, goodbye)..." />
+                        <input type="text" id="synthesis-input" placeholder="Type hello, thank you, goodbye, how are you..." />
                         <button class="btn btn-primary" id="btn-synthesize">Synthesize</button>
                     </div>
                 </div>

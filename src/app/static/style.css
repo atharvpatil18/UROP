@@ -466,3 +466,55 @@ body {
 .input-row input:focus {
     border-color: var(--primary);
 }
+
+/* Fallback 3D Canvas */
+#fallback-canvas-3d {
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: grab;
+}
+
+#fallback-canvas-3d:active {
+    cursor: grabbing;
+}
+
+/* Simulated Gesture Section */
+.simulated-gesture-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.015);
+    border: 1px dashed var(--card-border);
+    padding: 16px;
+    border-radius: 16px;
+    margin-top: 12px;
+}
+
+.simulated-gesture-section h3 {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.sim-buttons-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+
+.btn-sim {
+    padding: 8px 12px !important;
+    font-size: 11px !important;
+    border-radius: 8px !important;
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid var(--card-border) !important;
+    transition: all 0.2s ease !important;
+}
+
+.btn-sim:hover {
+    background: rgba(168, 85, 247, 0.12) !important;
+    border-color: var(--primary) !important;
+    color: #fff !important;
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+}
